@@ -1,6 +1,5 @@
 import java.io.IOException;
 import java.util.StringTokenizer;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IntWritable;
@@ -10,34 +9,53 @@ import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.hadoop.mapreduce.lib.input.FileSplit;
+import org.apache.hadoop.mapred.JobConf;
+public class CountingIndexer 
+{
 
-public class CountingIndexer {
-
-  public static class TokenizerMapper
-       extends Mapper<Object, Text, Text, IntWritable>{
+  public static class TokenizerMapper extends Mapper<Object, Text, Text, IntWritable>
+  {
 
     private final static IntWritable one = new IntWritable(1);
     private Text word = new Text();
 
-    public void map(Object key, Text value, Context context
-                    ) throws IOException, InterruptedException {
+    public void map(Object key, Text value, Context context) throws IOException, InterruptedException 
+    {
+      FileSplit filesplit = (FileSplit)context.getInputSplit();
+      String fileName = new String();
+      fileName = filesplit.getPath().getName(); //Get filenamei
       StringTokenizer itr = new StringTokenizer(value.toString());
-      while (itr.hasMoreTokens()) {
-        word.set(itr.nextToken());
-        context.write(word, one);
+      while (itr.hasMoreTokens()) 
+      {
+	String subject = itr.nextToken();
+	for(int i = 0; i < subject.length(); i++)
+	{
+		if(!Character.isLetter(subject.charAt(i)))
+		{
+			subject = subject.substring(0, i) + "" + subject.substring(i+1);
+			i--;
+		}
+	}
+	subject = subject.toLowerCase();
+	subject.trim();
+	if(!subject.isEmpty())
+	{
+        	word.set(subject + " " + fileName);
+        	context.write(word, one);
+	}
       }
     }
   }
 
-  public static class IntSumReducer
-       extends Reducer<Text,IntWritable,Text,IntWritable> {
+  public static class IntSumReducer extends Reducer<Text,IntWritable,Text,IntWritable> 
+  {
     private IntWritable result = new IntWritable();
-
-    public void reduce(Text key, Iterable<IntWritable> values,
-                       Context context
-                       ) throws IOException, InterruptedException {
+    public void reduce(Text key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException 
+    {
       int sum = 0;
-      for (IntWritable val : values) {
+      for (IntWritable val : values) 
+      {
         sum += val.get();
       }
       result.set(sum);
@@ -45,17 +63,19 @@ public class CountingIndexer {
     }
   }
 
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) throws Exception 
+  {
     Configuration conf = new Configuration();
     Job job = Job.getInstance(conf, "Counting Indexer");
+    job.setOutputFormatClass(PotatoOutput.class);
     job.setJarByClass(CountingIndexer.class);
     job.setMapperClass(TokenizerMapper.class);
     job.setCombinerClass(IntSumReducer.class);
     job.setReducerClass(IntSumReducer.class);
     job.setOutputKeyClass(Text.class);
     job.setOutputValueClass(IntWritable.class);
-    FileInputFormat.addInputPath(job, new Path(args[0]));
-    FileOutputFormat.setOutputPath(job, new Path(args[1]));
+    FileInputFormat.addInputPath(job, new Path(args[1]));
+    FileOutputFormat.setOutputPath(job, new Path(args[2]));
     System.exit(job.waitForCompletion(true) ? 0 : 1);
   }
 }
